@@ -8,7 +8,7 @@ import 'screens/home_screen.dart';
 
 void main() {
 
-  WidgetsFlutterBinding.ensureInitialized()
+  WidgetsFlutterBinding.ensureInitialized();
 
   if(kIsWasm){
     Firebase.initializeApp(
