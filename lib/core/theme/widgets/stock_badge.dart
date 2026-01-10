@@ -2,35 +2,36 @@ import 'package:flutter/material.dart';
 
 class StockBadge extends StatelessWidget {
   final int quantity;
-
   const StockBadge({super.key, required this.quantity});
 
   @override
   Widget build(BuildContext context) {
-    Color color;
-    String text;
+    Color badgeColor;
+    String statusText;
 
     if (quantity == 0) {
-      color = Colors.red;
-      text = 'Out of stock';
-    } else if (quantity < 5) {
-      color = Colors.orange;
-      text = 'Low stock';
+      badgeColor = Colors.red;
+      statusText = 'Out of Stock';
+    } else if (quantity < 10) {
+      badgeColor = Colors.orange;
+      statusText = 'Low Stock';
     } else {
-      color = Colors.green;
-      text = 'In stock';
+      badgeColor = Colors.green;
+      statusText = 'In Stock';
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(12),
+        color: badgeColor.withOpacity(0.1),
+        border: Border.all(color: badgeColor, width: 1),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        text,
+        statusText,
         style: TextStyle(
-          color: color,
+          color: badgeColor,
+          fontSize: 12,
           fontWeight: FontWeight.bold,
         ),
       ),

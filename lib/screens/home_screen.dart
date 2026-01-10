@@ -1,208 +1,172 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import '../providers/product_provider.dart';
+import '../core/theme/app_theme.dart';
+import '../core/theme/widgets/stock_badge.dart'; 
 import 'add_product_screen.dart';
 import 'edit_product_screen.dart';
-import '../providers/product_provider.dart';
-import '../core/widgets/stock_badge.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // جلب المنتجات عند التشغيل
+    Future.microtask(() => context.read<ProductProvider>().fetchProducts());
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // مراقبة الـ Provider للحصول على البيانات وحالة الثيم
     final productProvider = context.watch<ProductProvider>();
+    
+    // تحديد الأيقونة بناءً على وضع الثيم الحالي
+    final bool isDarkMode = productProvider.themeMode == ThemeMode.dark || 
+                           (productProvider.themeMode == ThemeMode.system && 
+                            Theme.of(context).brightness == Brightness.dark);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inventory Manager'),
+        centerTitle: true,
+        // إضافة زر تبديل الثيم في الـ AppBar
+        actions: [
+          IconButton(
+            icon: Icon(isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            onPressed: () {
+              // عكس الحالة الحالية
+              productProvider.toggleTheme(!isDarkMode);
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // 🔍 Search Bar
+          // 🔍 شريط البحث
           Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(12),
             child: TextField(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Search product...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                filled: true,
               ),
-              onChanged: (value) {
-                productProvider.setSearchQuery(value);
-              },
+              onChanged: (value) => productProvider.setSearchQuery(value),
             ),
           ),
 
-          // 🎯 Filter Chips
+          // 🎯 أزرار الفلترة
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                children: [
-                  FilterChip(
-                    label: const Text('All'),
-                    selected:
-                        productProvider.currentFilter == StockFilter.all,
-                    onSelected: (_) {
-                      productProvider.setFilter(StockFilter.all);
-                    },
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: StockFilter.values.map((filter) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: FilterChip(
+                    label: Text(filter.name.toUpperCase()),
+                    selected: productProvider.currentFilter == filter,
+                    onSelected: (_) => productProvider.setFilter(filter),
                   ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text('Low Stock'),
-                    selected:
-                        productProvider.currentFilter == StockFilter.low,
-                    onSelected: (_) {
-                      productProvider.setFilter(StockFilter.low);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text('Out of Stock'),
-                    selected:
-                        productProvider.currentFilter == StockFilter.out,
-                    onSelected: (_) {
-                      productProvider.setFilter(StockFilter.out);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text('In Stock'),
-                    selected: productProvider.currentFilter ==
-                        StockFilter.inStock,
-                    onSelected: (_) {
-                      productProvider.setFilter(StockFilter.inStock);
-                    },
-                  ),
-                ],
-              ),
+                );
+              }).toList(),
             ),
           ),
 
-          // 📦 Product List
+          const SizedBox(height: 10),
+
+          // 📦 قائمة المنتجات
           Expanded(
-            child: productProvider.filteredProducts.isEmpty
-                ? const Center(
-  child: Column(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: const [
-      Icon(
-        Icons.inventory_2_outlined,
-        size: 80,
-        color: Colors.grey,
-      ),
-      SizedBox(height: 12),
-      Text(
-        'No products found',
-        style: TextStyle(
-          fontSize: 18,
-          color: Colors.grey,
-        ),
-      ),
-    ],
-  ),
-)
-
-                : ListView.builder(
-                    itemCount: productProvider.filteredProducts.length,
-                    itemBuilder: (context, index) {
-                      final product =
-                          productProvider.filteredProducts[index];
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        child: ListTile(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    EditProductScreen(product: product),
-                              ),
-                            );
-                          },
-                          title: Text(
-                            product.name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              Text('Qty: ${product.quantity}'),
-                              const SizedBox(height: 4),
-                              StockBadge(
-                                  quantity: product.quantity),
-                            ],
-                          ),
-
-                          // 🗑️ Delete with confirmation
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete,
-                                color: Colors.red),
-                            onPressed: () async {
-                              final confirm =
-                                  await showDialog<bool>(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title:
-                                      const Text('Delete Product'),
-                                  content: const Text(
-                                      'Are you sure you want to delete this product?'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(
-                                              context, false),
-                                      child:
-                                          const Text('Cancel'),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () =>
-                                          Navigator.pop(
-                                              context, true),
-                                      child:
-                                          const Text('Delete'),
-                                    ),
-                                  ],
+            child: productProvider.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : productProvider.filteredProducts.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        itemCount: productProvider.filteredProducts.length,
+                        itemBuilder: (context, index) {
+                          final product = productProvider.filteredProducts[index];
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            child: ListTile(
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => EditProductScreen(product: product),
                                 ),
-                              );
-
-                              if (confirm == true) {
-                                productProvider
-                                    .deleteProduct(product.id);
-
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text('Product deleted'),
-                                  ),
-                                );
-                              }
-                            },
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                              ),
+                              title: Text(
+                                product.name,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 4),
+                                  Text('Qty: ${product.quantity} - Price: \$${product.price}'),
+                                  const SizedBox(height: 8),
+                                  StockBadge(quantity: product.quantity),
+                                ],
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                                onPressed: () => _confirmDelete(context, productProvider, product.id),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const AddProductScreen(),
-            ),
-          );
-        },
-        child: const Icon(Icons.add),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AddProductScreen()),
+        ),
+        child: const Icon(Icons.add_shopping_cart),
+      ),
+    );
+  }
+
+  // واجهة الحالة الفارغة
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey.withOpacity(0.5)),
+          const SizedBox(height: 10),
+          const Text('No products found', style: TextStyle(color: Colors.grey, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+
+  // حوار تأكيد الحذف
+  void _confirmDelete(BuildContext context, ProductProvider provider, String id) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Product?'),
+        content: const Text('This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              provider.deleteProduct(id);
+              Navigator.pop(context);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

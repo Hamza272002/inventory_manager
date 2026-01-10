@@ -16,29 +16,28 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _qtyController = TextEditingController();
   final _priceController = TextEditingController();
 
-  void _saveProduct() {
+  void _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final product = Product(
-      id: DateTime.now().toString(),
-      name: _nameController.text,
-      description: '',
-      quantity: int.parse(_qtyController.text),
-      price: double.parse(_priceController.text),
-      imageUrl: '',
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
+    // نقوم باستدعاء الدالة وتمرير القيم مباشرة كما هي معرفة في الـ Provider المحدث
+    // البارامترات المطلوبة الآن هي: (name, description, quantity, price)
+    try {
+      await context.read<ProductProvider>().addProduct(
+        _nameController.text,
+        '', // الوصف (Description) يمكنك تركه فارغاً حالياً
+        int.parse(_qtyController.text),
+        double.parse(_priceController.text),
+      );
 
-    context.read<ProductProvider>().addProduct(product);
-    Navigator.pop(context);
-  
-
-  ScaffoldMessenger.of(context).showSnackBar(
-  const SnackBar(content: Text('Product added successfully')),
-);
-
-  
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product added successfully')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint("Error adding product: $e");
+    }
   }
 
   @override
