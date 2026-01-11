@@ -6,6 +6,8 @@ import '../services/firestore_service.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum StockFilter { all, low, out, inStock }
 
@@ -57,6 +59,20 @@ class ProductProvider with ChangeNotifier {
       },
     );
   }
+
+
+  void shareProduct(Product product) {
+  final String message = '''
+Check out this product: ${product.name}
+Description: ${product.description}
+Price: \$${product.price}
+Quantity available: ${product.quantity}
+${product.imageUrl.isNotEmpty ? 'Image: ${product.imageUrl}' : ''}
+  ''';
+
+  // استدعاء واجهة المشاركة الخاصة بالنظام (موبايل أو متصفح)
+  Share.share(message, subject: 'Product Details: ${product.name}');
+}
 
   void stopListening() {
     _productsSubscription?.cancel();
@@ -125,18 +141,22 @@ class ProductProvider with ChangeNotifier {
   }
 
   /// تحديث المنتج
-  Future<void> updateProduct(String id, String description, int quantity, double price) async {
-    try {
-      await _firestoreService.updateProduct(id, {
-        'description': description,
-        'quantity': quantity,
-        'price': price,
-        'updatedAt': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      debugPrint("Update Error: $e");
-    }
+  // تحديث المنتج
+Future<void> updateProduct(String id, String description, int quantity, double price) async {
+  try {
+    await _firestoreService.updateProduct(id, {
+      'description': description,
+      'quantity': quantity,
+      'price': price,
+      // FieldValue.serverTimestamp() يضمن دقة الوقت من الخادم مباشرة
+      'updatedAt': FieldValue.serverTimestamp(), 
+    });
+  } catch (e) {
+    debugPrint("Update Error: $e");
   }
+}
+
+  
 
   // ================== FILTER & SEARCH LOGIC ==================
 

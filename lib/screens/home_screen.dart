@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart'; // 📅 استيراد مكتبة التنسيق
 import '../providers/product_provider.dart';
 import '../core/theme/widgets/stock_badge.dart'; 
 import 'add_product_screen.dart';
@@ -13,13 +14,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // الكنترولر هو مفتاح الحل لثبات النص
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    // بدء الاستماع للمنتجات عند فتح الشاشة
     Future.microtask(() => 
       context.read<ProductProvider>().startListeningToProducts()
     );
@@ -33,7 +32,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // نعرّف الـ Provider هنا باستخدام read لمنع إعادة بناء الحقل عند كل تغيير
     final productProvider = context.read<ProductProvider>();
 
     return Scaffold(
@@ -55,21 +53,20 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          // 🔍 شريط البحث - الزر X موجود دائماً الآن
+          // 🔍 شريط البحث
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
-              key: const ValueKey('PersistentSearchField'), // يحافظ على حالة الحقل
+              key: const ValueKey('PersistentSearchField'),
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search by name or description...',
                 prefixIcon: const Icon(Icons.search),
-                // زر X يظهر دائماً كما طلبت
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear),
                   onPressed: () {
-                    _searchController.clear(); // مسح النص من الحقل
-                    productProvider.setSearchQuery(''); // إعادة تصفير البحث في القائمة
+                    _searchController.clear();
+                    productProvider.setSearchQuery('');
                   },
                 ),
                 filled: true,
@@ -78,10 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderSide: BorderSide.none,
                 ),
               ),
-              onChanged: (value) {
-                // تحديث البحث في الخلفية دون التأثير على استقرار الحقل
-                productProvider.setSearchQuery(value);
-              },
+              onChanged: (value) => productProvider.setSearchQuery(value),
             ),
           ),
 
@@ -109,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const SizedBox(height: 10),
 
-          // 📦 قائمة المنتجات (الستايل الجمالي الكامل)
+          // 📦 قائمة المنتجات
           Expanded(
             child: Consumer<ProductProvider>(
               builder: (context, provider, _) {
@@ -122,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: products.length,
                   padding: const EdgeInsets.only(bottom: 80),
                   itemBuilder: (context, index) {
+                    
                     final product = products[index];
                     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -135,45 +130,87 @@ class _HomeScreenState extends State<HomeScreen> {
                           MaterialPageRoute(builder: (_) => EditProductScreen(product: product)),
                         ),
                         contentPadding: const EdgeInsets.all(12),
+                        
+                        leading: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.grey[200],
+                          ),
+                          child: product.imageUrl.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    product.imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
+                                  ),
+                                )
+                              : const Icon(Icons.inventory_2_outlined, color: Colors.grey),
+                        ),
+
                         title: Text(
                           product.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (product.description.isNotEmpty) ...[
-                              const SizedBox(height: 4),
                               Text(
                                 product.description,
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 13,
                                   color: isDark ? Colors.white70 : Colors.black54,
-                                  fontStyle: FontStyle.italic,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text('\$${product.price}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                const SizedBox(width: 10),
+                                Text('Qty: ${product.quantity}', style: const TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            StockBadge(quantity: product.quantity),
+                            
+                            // 🕒 عرض تاريخ آخر تعديل (Metadata) الجديد
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                const Icon(Icons.monetization_on_outlined, size: 18, color: Colors.green),
+                                Icon(Icons.history, size: 12, color: isDark ? Colors.white38 : Colors.black38),
                                 const SizedBox(width: 4),
-                                Text('\$${product.price}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(width: 16),
-                                const Icon(Icons.layers_outlined, size: 18, color: Colors.blue),
-                                const SizedBox(width: 4),
-                                Text('Qty: ${product.quantity}'),
+                                Text(
+                                  'Last modified: ${DateFormat('MMM d, yyyy • HH:mm').format(product.updatedAt)}',
+                                  style: TextStyle(
+                                    fontSize: 10, 
+                                    color: isDark ? Colors.white38 : Colors.black38,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
                               ],
                             ),
-                            const SizedBox(height: 10),
-                            StockBadge(quantity: product.quantity),
                           ],
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
-                          onPressed: () => _confirmDelete(context, provider, product.id),
+
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.share, color: Colors.blue, size: 22),
+                              tooltip: 'Share Product',
+                              onPressed: () => provider.shareProduct(product),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_sweep, color: Colors.redAccent, size: 22),
+                              onPressed: () => _confirmDelete(context, provider, product.id),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -195,6 +232,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ... (بقية الدوال _buildEmptyState و _confirmDelete تبقى كما هي)
   Widget _buildEmptyState() {
     return Center(
       child: Column(
