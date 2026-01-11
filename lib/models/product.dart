@@ -5,13 +5,9 @@ class Product {
   final int quantity;
   final double price;
   final String imageUrl;
-  
-  // Metadata (مطلوب في الخطة) [cite: 21]
   final DateTime createdAt;
   final DateTime updatedAt;
-  
-  // Attributes (Stats/Skills) (مطلوب في الخطة) [cite: 22]
-  final Map<String, dynamic> attributes; 
+  final Map<String, dynamic> attributes;
 
   Product({
     required this.id,
@@ -25,7 +21,6 @@ class Product {
     this.attributes = const {'category': 'General', 'rating': 5.0},
   });
 
-  // تحويل من JSON (مطلوب في الخطة) [cite: 23]
   factory Product.fromJson(Map<String, dynamic> json, String documentId) {
     return Product(
       id: documentId,
@@ -40,7 +35,6 @@ class Product {
     );
   }
 
-  // تحويل إلى JSON (مطلوب في الخطة) [cite: 23]
   Map<String, dynamic> toJson() {
     return {
       'name': name,

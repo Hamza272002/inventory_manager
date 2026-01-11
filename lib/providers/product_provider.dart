@@ -1,19 +1,25 @@
+import 'dart:async'; 
+import 'dart:typed_data'; // ضروري للتعامل مع الصور على الويب (Uint8List)
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/firestore_service.dart';
+import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
 enum StockFilter { all, low, out, inStock }
 
 class ProductProvider with ChangeNotifier {
-  final List<Product> _products = [];
+  List<Product> _products = [];
   final FirestoreService _firestoreService = FirestoreService();
   
+  StreamSubscription<List<Product>>? _productsSubscription;
+
   String _searchQuery = '';
   StockFilter _filter = StockFilter.all;
-  bool _isLoading = false;
+  bool _isLoading = false; 
+  bool _isListening = false; 
 
-  // ================== إعدادات الثيم (Material 3 Support) ==================
-  
   ThemeMode _themeMode = ThemeMode.system; 
   ThemeMode get themeMode => _themeMode;
 
@@ -23,30 +29,119 @@ class ProductProvider with ChangeNotifier {
   }
 
   // ================== GETTERS ==================
-  List<Product> get products => _products;
+  List<Product> get products => filteredProducts;
   bool get isLoading => _isLoading;
   StockFilter get currentFilter => _filter;
 
-  // ================== FIREBASE ACTIONS ==================
+  // ================== FIREBASE REAL-TIME ACTIONS ==================
 
-  /// جلب البيانات باستخدام factory constructor (JSON Deserialization)
-  Future<void> fetchProducts() async {
+  void startListeningToProducts() {
+    if (_isListening) return; 
+
+    _isListening = true;
     _isLoading = true;
-    notifyListeners();
-    try {
-      final data = await _firestoreService.getProducts();
-      _products.clear();
-      _products.addAll(data);
-    } catch (e) {
-      debugPrint("Error fetching: $e");
-    }
-    _isLoading = false;
+
+    _productsSubscription?.cancel();
+
+    _productsSubscription = _firestoreService.getProductsStream().listen(
+      (data) {
+        _products = data;
+        _isLoading = false;
+        notifyListeners(); 
+      },
+      onError: (error) {
+        debugPrint("Stream Error: $error");
+        _isLoading = false;
+        _isListening = false; 
+        notifyListeners();
+      },
+    );
+  }
+
+  void stopListening() {
+    _productsSubscription?.cancel();
+    _isListening = false;
+    _products = [];
     notifyListeners();
   }
 
-  /// الفلترة والبحث المتقدم
+  @override
+  void dispose() {
+    _productsSubscription?.cancel();
+    super.dispose();
+  }
+
+  // ================== CRUD OPERATIONS ==================
+
+  /// إضافة منتج مع رابط الصورة
+  Future<void> addProduct(String name, String desc, int qty, double price, String imageUrl) async {
+    try {
+      final now = DateTime.now();
+      final newProduct = Product(
+        id: '', 
+        name: name,
+        description: desc,
+        quantity: qty,
+        price: price,
+        imageUrl: imageUrl, 
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await _firestoreService.addProduct(newProduct);
+    } catch (e) {
+      debugPrint("Add Error: $e");
+      rethrow;
+    }
+  }
+
+  /// دالة رفع الصور المخصصة للويب (تستخدم Uint8List)
+  /// هذا يحل مشكلة "Image.file is not supported on Flutter Web"
+  Future<String> uploadImageWeb(Uint8List imageData, String fileName) async {
+    try {
+      // إنشاء اسم فريد باستخدام الوقت الحالي لمنع تداخل الأسماء
+      String uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
+      Reference ref = FirebaseStorage.instance.ref().child('product_images/$uniqueFileName');
+      
+      // استخدام putData بدلاً من putFile لضمان التوافق مع المتصفح
+      UploadTask uploadTask = ref.putData(imageData);
+      TaskSnapshot snapshot = await uploadTask;
+      
+      // الحصول على رابط الصورة النهائي
+      return await snapshot.ref.getDownloadURL();
+    } catch (e) {
+      debugPrint("Upload Error: $e");
+      return '';
+    }
+  }
+
+  /// حذف منتج
+  Future<void> deleteProduct(String id) async {
+    try {
+      await _firestoreService.deleteProduct(id);
+    } catch (e) {
+      debugPrint("Delete Error: $e");
+    }
+  }
+
+  /// تحديث المنتج
+  Future<void> updateProduct(String id, String description, int quantity, double price) async {
+    try {
+      await _firestoreService.updateProduct(id, {
+        'description': description,
+        'quantity': quantity,
+        'price': price,
+        'updatedAt': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint("Update Error: $e");
+    }
+  }
+
+  // ================== FILTER & SEARCH LOGIC ==================
+
   List<Product> get filteredProducts {
-    List<Product> list = _products;
+    List<Product> list = [..._products];
 
     if (_searchQuery.isNotEmpty) {
       list = list.where((p) => 
@@ -69,85 +164,6 @@ class ProductProvider with ChangeNotifier {
     }
     return list;
   }
-
-  /// إضافة منتج مع دعم Metadata و Attributes المطلوبة في الأسبوع الأول
-  Future<void> addProduct(String name, String desc, int qty, double price) async {
-    try {
-      final now = DateTime.now();
-      final newProduct = Product(
-        id: '', // سيتم تعيينه من قبل Firestore
-        name: name,
-        description: desc,
-        quantity: qty,
-        price: price,
-        createdAt: now,
-        updatedAt: now,
-        attributes: {'category': 'Default', 'rating': 5.0}, // إحصائيات إضافية
-      );
-
-      // تحويل الكائن إلى JSON قبل الإرسال (Serialization)
-      final id = await _firestoreService.addProduct(newProduct);
-      
-      // إضافة المنتج للقائمة المحلية مع الـ ID الحقيقي
-      _products.add(Product(
-        id: id,
-        name: name,
-        description: desc,
-        quantity: qty,
-        price: price,
-        createdAt: now,
-        updatedAt: now,
-        attributes: newProduct.attributes,
-      ));
-      
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Add Error: $e");
-      rethrow;
-    }
-  }
-
-  /// حذف منتج
-  Future<void> deleteProduct(String id) async {
-    try {
-      await _firestoreService.deleteProduct(id);
-      _products.removeWhere((p) => p.id == id);
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Delete Error: $e");
-    }
-  }
-
-  /// تحديث المنتج مع تحديث التوقيت (Last Modified Metadata)
-  Future<void> updateProduct(String id, int quantity, double price) async {
-    final now = DateTime.now();
-    try {
-      await _firestoreService.updateProduct(id, {
-        'quantity': quantity,
-        'price': price,
-        'updatedAt': now.toIso8601String(), // تحديث الـ Metadata
-      });
-
-      final index = _products.indexWhere((p) => p.id == id);
-      if (index != -1) {
-        _products[index] = Product(
-          id: _products[index].id,
-          name: _products[index].name,
-          description: _products[index].description,
-          quantity: quantity,
-          price: price,
-          createdAt: _products[index].createdAt,
-          updatedAt: now, // تحديث الوقت محلياً أيضاً
-          attributes: _products[index].attributes,
-        );
-        notifyListeners();
-      }
-    } catch (e) {
-      debugPrint("Update Error: $e");
-    }
-  }
-
-  // ================== UI SETTERS ==================
 
   void setSearchQuery(String value) {
     _searchQuery = value;

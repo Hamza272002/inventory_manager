@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart'; 
 import 'providers/product_provider.dart';
+import 'services/auth_service.dart';
 import 'screens/home_screen.dart';
+import 'screens/login_screen.dart'; 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,24 +41,45 @@ class InventoryApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        // تعريف الـ Provider ليكون متاحاً في كل التطبيق [cite: 39]
         ChangeNotifierProvider(create: (_) => ProductProvider()),
       ],
-      // نستخدم Consumer هنا لكي يتم إعادة بناء MaterialApp 
-      // فقط عندما يتغير الـ themeMode في الـ ProductProvider
       child: Consumer<ProductProvider>(
         builder: (context, productProvider, child) {
           return MaterialApp(
             title: 'Inventory Manager',
             debugShowCheckedModeBanner: false,
-            
-            // إعدادات الثيم من ملف AppTheme
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            
-            // التعديل الجوهري: ربط التطبيق بحالة الثيم الموجودة في الـ Provider
+            // ربط حالة الثيم بالمزود [cite: 42]
             themeMode: productProvider.themeMode, 
             
-            home: const HomeScreen(),
+            // استخدام StreamBuilder لمراقبة حالة المستخدم لحظياً [cite: 35, 43]
+            home: StreamBuilder(
+              stream: AuthService().user, 
+              builder: (context, snapshot) {
+                // إذا كان Firebase يتحقق من المستخدم
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Scaffold(body: Center(child: CircularProgressIndicator()));
+                }
+                
+                // إذا وجد مستخدم مسجل [cite: 46]
+                if (snapshot.hasData) {
+  // بدلاً من الاستدعاء المباشر، نستخدم هذا الكود:
+  final provider = Provider.of<ProductProvider>(context, listen: false);
+  
+  // نستخدم التوقيت الصغير لضمان عدم حدوث تصادم في البناء
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    provider.startListeningToProducts();
+  });
+
+  return const HomeScreen();
+}
+                
+                // إذا لم يكن مسجلاً، توجه لشاشة تسجيل الدخول
+                return const LoginScreen();
+              },
+            ),
           );
         },
       ),
