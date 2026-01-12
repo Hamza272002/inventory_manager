@@ -60,19 +60,18 @@ class ProductProvider with ChangeNotifier {
     );
   }
 
-
   void shareProduct(Product product) {
-  final String message = '''
+    final String message = '''
 Check out this product: ${product.name}
 Description: ${product.description}
 Price: \$${product.price}
 Quantity available: ${product.quantity}
 ${product.imageUrl.isNotEmpty ? 'Image: ${product.imageUrl}' : ''}
-  ''';
+    ''';
 
-  // استدعاء واجهة المشاركة الخاصة بالنظام (موبايل أو متصفح)
-  Share.share(message, subject: 'Product Details: ${product.name}');
-}
+    // استدعاء واجهة المشاركة الخاصة بالنظام
+    Share.share(message, subject: 'Product Details: ${product.name}');
+  }
 
   void stopListening() {
     _productsSubscription?.cancel();
@@ -111,19 +110,15 @@ ${product.imageUrl.isNotEmpty ? 'Image: ${product.imageUrl}' : ''}
     }
   }
 
-  /// دالة رفع الصور المخصصة للويب (تستخدم Uint8List)
-  /// هذا يحل مشكلة "Image.file is not supported on Flutter Web"
+  /// دالة رفع الصور المخصصة للويب
   Future<String> uploadImageWeb(Uint8List imageData, String fileName) async {
     try {
-      // إنشاء اسم فريد باستخدام الوقت الحالي لمنع تداخل الأسماء
       String uniqueFileName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
       Reference ref = FirebaseStorage.instance.ref().child('product_images/$uniqueFileName');
       
-      // استخدام putData بدلاً من putFile لضمان التوافق مع المتصفح
       UploadTask uploadTask = ref.putData(imageData);
       TaskSnapshot snapshot = await uploadTask;
       
-      // الحصول على رابط الصورة النهائي
       return await snapshot.ref.getDownloadURL();
     } catch (e) {
       debugPrint("Upload Error: $e");
@@ -140,32 +135,34 @@ ${product.imageUrl.isNotEmpty ? 'Image: ${product.imageUrl}' : ''}
     }
   }
 
-  /// تحديث المنتج
-  // تحديث المنتج
-Future<void> updateProduct(String id, String description, int quantity, double price) async {
-  try {
-    await _firestoreService.updateProduct(id, {
-      'description': description,
-      'quantity': quantity,
-      'price': price,
-      // FieldValue.serverTimestamp() يضمن دقة الوقت من الخادم مباشرة
-      'updatedAt': FieldValue.serverTimestamp(), 
-    });
-  } catch (e) {
-    debugPrint("Update Error: $e");
+  /// تحديث المنتج (تم التعديل لإضافة الاسم)
+  Future<void> updateProduct(String id, String name, String description, int quantity, double price) async {
+    try {
+      await _firestoreService.updateProduct(id, {
+        'name': name, // <--- إضافة الاسم هنا ليتم تحديثه في Firestore
+        'description': description,
+        'quantity': quantity,
+        'price': price,
+        // FieldValue.serverTimestamp() يضمن دقة الوقت من الخادم مباشرة
+        'updatedAt': FieldValue.serverTimestamp(), 
+      });
+    } catch (e) {
+      debugPrint("Update Error: $e");
+    }
   }
-}
-
-  
 
   // ================== FILTER & SEARCH LOGIC ==================
 
   List<Product> get filteredProducts {
     List<Product> list = [..._products];
 
+    // الترتيب التلقائي: الأحدث تعديلاً يظهر في الأعلى
+    list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
     if (_searchQuery.isNotEmpty) {
       list = list.where((p) => 
-        p.name.toLowerCase().contains(_searchQuery.toLowerCase())
+        p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+        p.description.toLowerCase().contains(_searchQuery.toLowerCase())
       ).toList();
     }
 
